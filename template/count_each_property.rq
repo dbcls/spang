@@ -1,0 +1,7 @@
+# Count triples for each property
+SELECT (COUNT(?property) AS ?count) ?property
+WHERE {
+    ?s ?property ?o .
+}
+GROUP BY ?property
+ORDER BY DESC(?count)

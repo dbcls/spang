@@ -1,0 +1,22 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+use FindBin;
+my $SPANG_DIR;
+BEGIN { $SPANG_DIR = "$FindBin::Bin/.." }
+use lib "$SPANG_DIR/pm";
+use SPANG::JSON;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: $PROGRAM [JSON_FILE]
+-v : print variable names
+";
+
+my %OPT;
+getopts('v', \%OPT);
+
+my $INPUT = `cat`;
+if ($INPUT =~ /\S/) {
+    print json_to_tsv($INPUT, header => $OPT{v});
+}

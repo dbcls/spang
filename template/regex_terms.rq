@@ -1,0 +1,15 @@
+# Regex search for term labels (classs or properties)
+#param homolo
+SELECT DISTINCT ?term_type ?term_uri ?term_label
+WHERE {
+    ?term_uri a ?term_type .
+    ?term_uri rdfs:label ?term_label .
+    FILTER regex(?term_label, "$1", "i")
+    VALUES (?term_type) { (owl:Class)
+    	                  (rdfs:Class)
+    	                  (rdf:Property)
+    	                  (owl:ObjectProperty)
+                          (owl:DatatypeProperty)
+                          (owl:AnnotationProperty) }
+}
+ORDER BY ?term_type ?term_uri

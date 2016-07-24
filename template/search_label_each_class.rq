@@ -1,0 +1,10 @@
+# Free text search in Virtuoso (count instances of each class)
+SELECT (COUNT(DISTINCT ?instance) AS ?count) ?class
+WHERE {
+    ?instance rdfs:label ?text .
+    ?text bif:contains '"$1"' .
+    OPTIONAL {
+        ?instance a ?class .
+    }
+}
+ORDER BY DESC(?count)

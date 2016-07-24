@@ -1,0 +1,110 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: cat TDP_OUT.ttl | $PROGRAM
+";
+
+my %OPT;
+getopts('', \%OPT);
+
+### Read ###
+my %EDGE = ();
+my %VERTEX = ();
+my %N_ENTITIES = ();
+my $INDEX = 1;
+
+my $PROPERTY = "";
+!@ARGV && -t and die $USAGE;
+while (my $line = <STDIN>) {    
+    chomp($line);
+    ### The number of entities for each class
+    if ($line =~ /^\s+void:classPartition\s/) {
+	my ($class, $n_class);
+	$line = <STDIN>;
+	$line =~ /^\s+void:class\s+(\S+) ;$/ ?  $class = $1 : die;
+	$line = <STDIN>;
+	$line =~ /^\s+void:entities\s+\"(\d+)\"/ ? $n_class = $1 : die;
+	$N_ENTITIES{$class} = $n_class;
+    }
+    ### The numbe of edges between classes
+    if ($line =~ /^\s+void:property\s+(\S+) ;$/) {
+	$PROPERTY = $1;
+    }
+    if ($line =~ /^\s+sbm:classRelation\s/) {
+	my ($subject_class, $object_class, $triples);
+	$line = <STDIN>;
+	$line =~ /^\s+void:triples\s+"(\d+)"/ ? $triples = $1 : die;
+	$line = <STDIN>;
+	$line =~ /^\s+sbm:objectClass\s+(\S+) ;$/ ? $object_class = $1 : die;
+	$line = <STDIN>;
+	$line =~ /^\s+sbm:sample\s/ or die;
+	$line = <STDIN>;
+	$line =~ /^\s+sbm:subjectClass\s+(\S+)$/ ? $subject_class = $1 : die;
+	if (defined $subject_class && defined $object_class && defined $triples && $PROPERTY ne "") {
+	    $subject_class =~ /^rdfs:Resource$/ and $subject_class .= $INDEX++;
+	    $object_class =~ /^(rdfs:Literal|rdfs:Resource)$/ and $object_class .= $INDEX++;
+	    $EDGE{$subject_class}{$object_class} = "$PROPERTY\\n  $triples";
+	    $VERTEX{$subject_class} = 1;
+	    $VERTEX{$object_class} = 1;
+	}
+    }
+}
+
+### Print ###
+print "digraph {\n";
+print "    ranksep=2;\n";
+print "    rankdir=\"LR\";\n";
+print "    charset=\"utf-8\";\n";
+print "\n";
+
+### Print edges ###
+print "    // Class relations with the numbers of edges\n";
+for my $subject_class (sort {$a cmp $b} keys %EDGE) {
+    for my $object_class (sort {$a cmp $b} keys %{$EDGE{$subject_class}}) {
+	my $label = $EDGE{$subject_class}{$object_class};
+	print "    \"$subject_class\" -> \"$object_class\" \[ label=\"$label\"\];\n";
+    }
+}
+print "\n";
+
+### Print nodes (class with the number of entities) ###
+print "    // The number of entities\n";
+my %CHECKED = ();
+for my $node (sort {$a cmp $b} keys %VERTEX) {
+    my $class_name = $node;
+    $class_name =~ s/^(rdfs:Literal|rdfs:Resource)\d+$/$1/;
+    my $number = defined($N_ENTITIES{$node}) ? "\\n$N_ENTITIES{$node}" : "";
+    my $shape = produce_box_shape($class_name);
+    print "    \"$node\" \[ label=\"$class_name$number\"$shape \] ;\n";
+    $CHECKED{$node} = 1;
+}
+print "\n";
+
+for my $node (keys %N_ENTITIES) {
+    if ($node =~ /^rdfs:Literal|rdfs:Resource$/) {
+	next;
+    }
+    if ($CHECKED{$node}) {
+    } else {
+	my $number = defined($N_ENTITIES{$node}) ? "\\n$N_ENTITIES{$node}" : "";
+	print "    \"$node\" \[ label=\"$node$number\" \] ;\n";
+    }
+}
+
+print "}\n";
+
+################################################################################
+### Functions ##################################################################
+################################################################################
+sub produce_box_shape {
+    my ($class_name) = @_;
+
+    if ($class_name eq "rdfs:Literal") {
+	return ", shape=box, height=0.3";
+    } else {
+	return "";
+    }
+}

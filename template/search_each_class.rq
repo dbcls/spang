@@ -1,0 +1,8 @@
+# Free text search in Virtuoso (count instances of each class)
+SELECT (COUNT(DISTINCT ?resource) AS ?count) ?class
+WHERE {
+    ?resource a ?class ;
+          ?property ?text .
+    ?text bif:contains '"$1"' .
+}
+ORDER BY DESC(?count)

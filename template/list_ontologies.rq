@@ -1,0 +1,9 @@
+# List of ontologies
+SELECT DISTINCT ?ontology ?title
+WHERE {
+    ?ontology a owl:Ontology .
+    OPTIONAL {
+        ?ontology dc:title|dct:title ?title .
+    }
+}
+ORDER BY ?ontology

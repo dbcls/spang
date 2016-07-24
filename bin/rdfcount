@@ -1,0 +1,62 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: cat RDF | $PROGRAM
+
+-i FORMAT (guess the input format by default)
+-v : verbose
+-d : print debug info and exit
+
+Requirements: 
+'rapper' command included in Raptor RDF Syntax Library 
+(http://librdf.org/raptor/) should be available (in command path).
+
+";
+
+### Settings ###
+my %OPT;
+getopts('i:vd', \%OPT);
+
+my $TMP_DIR = "/tmp";
+$ENV{TMP} and -d $ENV{TMP} and
+    $TMP_DIR = $ENV{TMP};
+
+my $TMP_FILE = "$TMP_DIR/$PROGRAM.$$";
+my $TMP_ERR = "$TMP_DIR/$PROGRAM.err.$$";
+END {
+    $TMP_FILE && -f $TMP_FILE and
+	unlink $TMP_FILE;
+    $TMP_ERR && -f $TMP_ERR and
+	unlink $TMP_ERR;
+}
+
+### Main ###
+-t and die $USAGE;
+system "cat > $TMP_FILE";
+
+my $FORMAT_OPT = $OPT{i} ? "-i $OPT{i}" : "-g";
+my $COMMAND = "rapper $FORMAT_OPT -c $TMP_FILE";
+
+if ($OPT{d}) {
+    print $COMMAND;
+    exit;
+}
+
+if ($OPT{v}) {
+    system "$COMMAND";
+} else {
+    my $out = `$COMMAND 2>&1`;
+    my $exit_value = $? >> 8;
+    if ($out =~ /^rapper: Parsing returned (\d+) triples\n/m) {
+	print "$1\n";
+    } else {
+	print STDERR "ERROR: cannot count\n";
+    }
+    if ($exit_value != 0) {
+    	print STDERR $out;
+    	exit($exit_value);
+    }
+}

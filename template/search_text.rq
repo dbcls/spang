@@ -1,0 +1,7 @@
+# Free text search in Virtuoso
+SELECT ?instance ?property ?text
+WHERE {
+    ?instance ?property ?text .
+    ?text bif:contains '"$1"' .
+}
+ORDER BY ?text

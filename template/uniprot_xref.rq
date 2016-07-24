@@ -1,0 +1,9 @@
+# Get cross-reference from UniProtID to other database
+#stdin uniprot:P74367
+#param PDB
+SELECT ?uniprot ?xref
+WHERE {
+    VALUES (?uniprot) { $STDIN }
+    ?uniprot rdfs:seeAlso ?xref .
+    ?xref up:database <http://purl.uniprot.org/database/$1> .
+}

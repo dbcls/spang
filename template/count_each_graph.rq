@@ -1,0 +1,9 @@
+# Count triples for each graph
+SELECT ?graph (COUNT(?graph) AS ?triples)
+WHERE {
+    GRAPH ?graph {
+        ?s ?p ?o .
+    }
+}
+GROUP BY ?graph
+ORDER BY DESC(?triples)

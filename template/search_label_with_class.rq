@@ -1,0 +1,8 @@
+# Free text search in Virtuoso (for a specific class)
+SELECT DISTINCT ?instance
+WHERE {
+    ?instance a $1 ;
+          rdfs:label ?text .
+    ?text bif:contains '"$2"' .
+}
+ORDER BY ?instance

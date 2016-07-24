@@ -1,0 +1,13 @@
+dbpedia http://dbpedia.org/sparql
+uniprot http://sparql.uniprot.org
+allie http://data.allie.dbcls.jp/sparql
+atlas http://www.ebi.ac.uk/rdf/services/atlas/sparql
+chembl http://www.ebi.ac.uk/rdf/services/chembl/sparql
+reactome http://www.ebi.ac.uk/rdf/services/reactome/sparql
+biosamples http://www.ebi.ac.uk/rdf/services/biosamples/sparql
+biomodels http://www.ebi.ac.uk/rdf/services/biomodels/sparql
+ensembl http://www.ebi.ac.uk/rdf/services/ensembl/sparql
+cyano http://genome.microbedb.jp/sparql/
+nibb http://sparql.nibb.ac.jp/sparql
+mbgd http://sparql.nibb.ac.jp/sparql
+disgenet http://rdf.disgenet.org/sparql/

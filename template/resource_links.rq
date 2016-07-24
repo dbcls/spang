@@ -1,0 +1,15 @@
+# Links from a specific instance are extracted
+CONSTRUCT {
+    ?s ?p ?o
+}
+WHERE {
+    {
+	VALUES (?s) { ($1) }
+	?s ?p ?o
+    }
+    UNION
+    {
+	VALUES (?o) { ($1) }
+	?s ?p ?o
+    }
+}

@@ -1,0 +1,42 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+use FindBin;
+my $SPANG_DIR = "$FindBin::Bin/..";
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: $PROGRAM TDP_OUT.ttl
+
+-f FORMAT : pdf by default
+
+Requirements:
+'dot' command included in GraphViz should be available
+(in command path).
+
+";
+
+### Arguments ###
+my %OPT;
+getopts('f:', \%OPT);
+
+my $FORMAT = $OPT{f} || "pdf";
+
+if (@ARGV != 1) {
+    print STDERR $USAGE;
+    exit 1;
+}
+my $FILE = shift @ARGV;
+-f $FILE || die "$!\n";
+
+### Settings ###
+my $DOT_FILE = "$FILE.dot";
+my $OUTPUT_FILE = "$FILE.$FORMAT";
+if ($FILE =~ /^(\S+)\.out$/) {
+    $DOT_FILE = "$1.dot";
+    $OUTPUT_FILE = "$1.$FORMAT";
+}
+
+### Conversion ###
+system "cat $FILE | $SPANG_DIR/bin/abbrev_prefix | $SPANG_DIR/bin/tdp2dot > $DOT_FILE";
+-f "$DOT_FILE" and system "dot -T$FORMAT $DOT_FILE > $OUTPUT_FILE";

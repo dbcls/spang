@@ -1,0 +1,15 @@
+# Get sub-classes or sub-properties
+#param tax:511145
+SELECT DISTINCT ?term ?label
+WHERE {
+    {
+	?term rdfs:subClassOf $1 .
+    }
+    UNION
+    {
+	?term rdfs:subPropertyOf $1 .
+    }
+    OPTIONAL {
+    	?term rdfs:label ?label
+    }
+}

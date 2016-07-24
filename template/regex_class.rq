@@ -1,0 +1,8 @@
+# Find classes with labels matching the pattern
+#param ^apolipoprotein
+SELECT DISTINCT ?class ?label
+WHERE {
+    ?class a owl:Class ;
+           rdfs:label ?label .
+    FILTER regex(?label, "$1", "i")
+}

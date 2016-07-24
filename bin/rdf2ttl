@@ -1,0 +1,61 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: cat RDF | $PROGRAM
+
+-i FORMAT (guess the input format by default)
+-v : verbose
+-d : print debug info and exit
+
+Requirements: 
+'rapper' command included in Raptor RDF Syntax Library 
+(http://librdf.org/raptor/) should be available (in command path).
+
+";
+# Hidden options
+# -a : abbreviate URIs using predefined prefixes
+
+### Settings ###
+my %OPT;
+getopts('i:vda', \%OPT);
+
+my $TMP_DIR = "/tmp";
+$ENV{TMP} and -d $ENV{TMP} and
+    $TMP_DIR = $ENV{TMP};
+
+my $TMP_INPUT = "$TMP_DIR/$PROGRAM.input.$$";
+my $TMP_ERR = "$TMP_DIR/$PROGRAM.err.$$";
+END {
+    $TMP_INPUT && -f $TMP_INPUT and
+	unlink $TMP_INPUT;
+    $TMP_ERR && -f $TMP_ERR and
+	unlink $TMP_ERR;
+}
+
+### Main ###
+-t and die $USAGE;
+system "cat > $TMP_INPUT";
+
+my $FORMAT_OPT = $OPT{i} ? "-i $OPT{i}" : "-g";
+my $COMMAND = "rapper $FORMAT_OPT -o turtle $TMP_INPUT";
+! $OPT{v} and $COMMAND .= " 2> $TMP_ERR";
+$OPT{a} and $COMMAND .= " | abbrev_prefix";
+
+if ($OPT{d}) {
+    print "$COMMAND\n";
+    exit;
+}
+
+system "$COMMAND";
+
+if (! $OPT{v}) {
+    my $exit_value = $? >> 8;
+    if ($exit_value != 0) {
+    	my $err = `cat $TMP_ERR`;
+    	print STDERR $err;
+    	exit($exit_value);
+    }
+}

@@ -1,0 +1,62 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+use FindBin;
+my $SPANG_DIR;
+BEGIN { $SPANG_DIR = "$FindBin::Bin/.." }
+use lib "$SPANG_DIR/pm";
+use SPANG::Prefix;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: cat RDF | $PROGRAM
+-b : with prefix declarations at beginning
+-c : align output columns
+-r PREFIX_FILE,... (default \'SPANG_DIR/etc/prefix,~/.spang/prefix\')
+-n : do not read prefix files
+";
+# -s : sort resulting lines
+
+my %OPT;
+getopts('abcr:ns', \%OPT);
+if (! $OPT{a} and ! $OPT{b}) {
+    $OPT{a} = 1;
+}
+
+-t and die $USAGE;
+my $RDF  = `cat`;
+
+### Reading prefixes ###
+my @PREFIX_FILE = ("$SPANG_DIR/etc/prefix", "$ENV{HOME}/.spang/prefix");
+if ($OPT{r}) {
+    @PREFIX_FILE = split(",", $OPT{r});
+} elsif ($OPT{n}) {
+    @PREFIX_FILE = ("$SPANG_DIR/etc/prefix");
+}
+my %TO_LONG_FORM = ();
+my %TO_SHORT_FORM = ();
+read_prefix(\%TO_SHORT_FORM, \%TO_LONG_FORM, @PREFIX_FILE);
+
+### Convert ###
+my $RESULT = abbrev_result($RDF, \%TO_SHORT_FORM, %OPT);
+
+pretty_print($RESULT, %OPT);
+
+################################################################################
+### Functions ##################################################################
+################################################################################
+sub pretty_print {
+    my ($result, %opt) = @_;
+
+    my $filter = "";
+    $opt{c} and $filter .= '| align_column';
+    $opt{s} and $filter .= '| sort';
+    
+    if ($filter) {
+	open(PIPE, "$filter") || die;
+	print PIPE $result;
+	close(PIPE);
+    } else {
+    	print $result;
+    }
+}

@@ -1,0 +1,20 @@
+# Get information about resources
+#stdin eco:B0002
+SELECT DISTINCT ?resource ?label ?title ?description ?comment
+WHERE {
+    VALUES (?resource) { $STDIN }
+    ?resource ?p ?o .
+    OPTIONAL {
+    	?resource rdfs:label ?label .
+    }
+    OPTIONAL {
+    	?resource dct:title ?title .
+    }
+    OPTIONAL {
+    	?resource dct:description ?description .
+    }
+    OPTIONAL {
+    	?resource rdfs:comment ?comment .
+    }
+}
+ORDER BY ?label ?title ?description ?comment

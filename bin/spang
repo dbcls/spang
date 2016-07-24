@@ -1,0 +1,791 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+use FindBin;
+my $SPANG_DIR;
+BEGIN { 
+    $SPANG_DIR = "$FindBin::Bin";
+    if ($SPANG_DIR =~ /^(.+)\/bin$/) {
+	$SPANG_DIR = $1;
+    } else {
+	die "ERROR: $SPANG_DIR is  not a correct dir for spang";
+    }
+}
+use lib "$SPANG_DIR/pm";
+use SPANG::Arguments;
+use SPANG::Prefix;
+use SPANG::Endpoints;
+use SPANG::Querying;
+my $PROGRAM = basename $0;
+my $USAGE =
+'USAGE
+  spang DB -[SHORTCUT] [-OPTION]
+  spang DB SPARQL_TEMPLATE [ARG] [-OPTION]
+  spang DB \'SPARQL CODE ...\'     [-OPTION]
+
+DB
+  SPARQL endpoint (URL or nickname in ~/.spang/endpoints SPANG_DIR/etc/endpoints)
+  spang -l for list of nicknames
+  spang -h for how to query local RDF file
+
+SHORTCUT
+ -S SUBJECT
+ -P PREDICATE
+ -O OBJECT
+ -F GRAPH : searh FROM specific graph (use alone or with -[SPOLN])
+ -L NUMBER : LIMIT output (use alone or with -[SPOF])
+ -N : COUNT results (use alone or with -[SPOF])
+ -G : GRAPH clause to output graph names (use alone or with -[SPO])
+
+OPTION
+ -f FORMAT : tsv, json, n-triples (nt), turtle (ttl), rdf/xml (rdfxml), 
+             n3, xml, html; default tsv
+ -a : abbreviate results using predefined prefixes
+ -b : same as -a but with prefix declarations at beginning
+ -c : align output columns
+ -v : show variable names (for tsv format)
+ -q : show query and quit (with some debug info in STDERR)
+ -l : list of available nicknames
+ -r PREFIX_FILE,... (default SPANG_DIR/etc/prefix,~/.spang/prefix)
+ -i RULE_SET : enable inference by RULE_SET (only for Virtuoso)
+ -t SEC : HTTP timeout (default 180)  
+ -u USER -p PASSWORD : HTTP basic authentication  
+ -h : help
+';
+
+# Hidden options
+# -C : CONSTRUCT
+# -T CLASS
+# -X NODE_URI
+# -I GRAPH : insert triples (from stdin) to graph
+# -D GRAPH : delete triples (from stdin) from graph
+# -Q GRAPH : execute a query (stored in SPIN format as GRAPH)
+# -V : use FILTER instead of VALUES to embed values from STDIN
+# -s : sort resulting lines
+# -g : GET method
+# -d : debug (use with GET method)
+# -n : do not read user-defined prefix file
+# -k KEY : API key (for BioPortal)
+
+my $DESCRIPTION = '
+SPARQL_TEMPLATE
+ primarily searched from ~/.spang/template/* and then from SPANG_DIR/template/*
+ (.rq file extension can be ommitted)
+   query_name
+   query_name.rq
+   category/categorized_query_name
+ You can explicitly specify a path to a query file.
+   ./path/to/query.rq, ~/path/to/query.rq or /path/to/query.rq
+ You can also specify a URL (that returns SPARQL query string) or its abbreviated form.
+   http://hostname/category/query.rq
+   prefix:category/query.rq
+
+ARG
+ $1 $2 ... in the SPARQL query are replaced with ARGs
+
+Combining multiple queries
+ A typical usage is
+   spang ENDPOINT1 QUERY1 | spang ENDPOINT2 QUERY2
+ where the output of QUERY1 is embedded into QUERY2, before runnig QUERY2;
+   VALUES (?v1 ?v2) { $STDIN }
+ in QUERY2 is transformed into the following.
+   VALUES (?v1 ?v2) { (line 1) (line 2) ... }
+ You can also use shortcuts to get values from STDIN, e.g.
+   spang ENDPOINT1 QUERY1 | spang ENDPOINT2 -S 1
+ where values in column 1 are used as subject.
+
+Searching local DB
+ Specify a path to .ttl file
+   spang ./file.ttl QUERY
+ or specify - to read RDF from STDIN.
+   cat file.ttl | spang - QUERY
+ To use this functionality, \'sparql\' command included in Apache Jena package should
+ be available (should be in the command path).
+
+';
+
+# Further Descriptions
+
+# Variable bindings can be passed though Standard I/O in the form of tab separated table;
+# the output from a query to STDOUT is passed to another one as STDIN and embedded therein,
+# by replacing the placeholder $STDIN with (line 1) ... (line n).
+
+# Obtaining a remote file
+#  spang REMOTE_FILE [-x CLIENT_COMMAND | -w] [-q]
+#    -x CLIENT_PROGRAM : client program used for accessing remote file (default 'curl -LsS')
+#    -w : same as -c wget
+#    -q : print debug info and quit
+#  REMOTE_FILE can be full URI or prefixed URI
+#    spang pdb:4TPS
+#    spang pdb:4TPS -q
+#    spang skos:    # returns SKOS OWL file
+#    spang skos     # returns SKOS OWL file
+#    spang skos -w  # save SKOS OWL file
+
+################################################################################
+### Settings ###################################################################
+################################################################################
+
+### Prefixes ###
+my @PREFIX_FILE = ("$SPANG_DIR/etc/prefix", "$ENV{HOME}/.spang/prefix");
+
+### SPARQL libraries ###
+my @LIBRARY = ("$ENV{HOME}/.spang/template", "$SPANG_DIR/template", ".");
+read_config("$ENV{HOME}/.spang/config", \@LIBRARY);
+
+### SPARQL endpoints ###
+my @ENDPOINT_FILE = ("$SPANG_DIR/etc/endpoints", "$ENV{HOME}/.spang/endpoints");
+my %NICKNAME2URL = ();
+my %NICKNAME2METHOD = ();
+my @NICKNAME_LIST = ();
+read_endpoint_list(\%NICKNAME2URL, \%NICKNAME2METHOD, \@NICKNAME_LIST, \@ENDPOINT_FILE);
+
+### Save STDIN ###
+my $TMP_STDIN;
+if ($ENV{TMP} && -d $ENV{TMP}) {
+    $TMP_STDIN = "$ENV{TMP}/spang.$$.tmp.ttl";
+} else {
+    $TMP_STDIN = "/tmp/spang.$$.tmp.ttl";
+}
+END {
+    $TMP_STDIN && -f $TMP_STDIN and
+        unlink $TMP_STDIN;
+}
+
+my $STDIN = save_stdin($TMP_STDIN) if ! -t;
+
+################################################################################
+### Analize command line arguments #############################################
+################################################################################
+
+### First argument ###
+# DB or -[hlaA]
+if (!@ARGV) {
+    print STDERR $USAGE;
+    exit 1;
+}
+tokenize_first_arg(\@ARGV);
+if ($ARGV[0] eq "-h") {
+    print $USAGE . $DESCRIPTION;
+    exit;
+} elsif ($ARGV[0] eq "-l") {
+    print output_endpoint_list(\%NICKNAME2URL, \@NICKNAME_LIST, \@ENDPOINT_FILE);
+    exit;
+} elsif ($ARGV[0] =~ /^(-a|-b|-ac|-ca)$/) {
+    if (-f $TMP_STDIN) {
+	system "cat $TMP_STDIN | $SPANG_DIR/bin/abbrev_prefix @ARGV";
+	exit;
+    } else {
+	print STDERR "ERROR: no input from stdin.\n";
+	exit 1;
+    }
+} elsif ($ARGV[0] =~ /^-\w/) {
+    print STDERR "$ARGV[0]: invalid option\n";
+    exit 1;
+}
+my $DB = shift(@ARGV);
+
+### The rest of arguments ###
+# SPARQL template with parameters (or SPARQL shortcuts)
+my $SPARQL_TEMPLATE;
+if (@ARGV) {
+    if ($ARGV[0] !~ /^-/ or $ARGV[0] eq "-") {
+	$SPARQL_TEMPLATE = shift(@ARGV);
+    }
+}
+my @PARAMETER = ();
+while (@ARGV and $ARGV[0] !~ /^-/) {
+    push @PARAMETER, shift(@ARGV);
+}
+
+### Options ###
+my %OPT;
+getopts('S:P:O:F:L:NGf:abqr:i:t:u:p:vlhX:T:AQ:I:D:Vnx:wcsCgdk:', \%OPT);
+
+if (! defined $OPT{f}) {
+    # default file format
+    if ($OPT{C}) {
+	$OPT{f} = "n-triples"
+    } elsif ($OPT{F} and ! $OPT{S} and ! $OPT{P} and ! $OPT{O} and ! $OPT{N} and ! $OPT{G}) {
+	$OPT{C} = 1;
+	$OPT{f} = "n-triples"
+    } else {
+	$OPT{f} = "tsv"
+    }
+} elsif ($OPT{f} =~ /^(n-triples|nt|turtle|ttl|rdf\/xml|rdfxml|n3)$/) {
+    # generate CONSTRUCT query
+    if (! $SPARQL_TEMPLATE) {
+	$OPT{C} = 1;
+    }
+}
+
+my %FORMAT_OPT  = (a => $OPT{a}, b => $OPT{b}, header => $OPT{v}, format => $OPT{f});
+my %CONNECT_OPT = (timeout => $OPT{t}, user => $OPT{u}, password => $OPT{p});
+
+### Reading prefixes ###
+my %TO_SHORT_PREFIX = ();
+my %TO_LONG_URI = ();
+if ($OPT{r}) {
+    @PREFIX_FILE = split(",", $OPT{r});
+} elsif ($OPT{n}) {
+    @PREFIX_FILE = ("$SPANG_DIR/etc/prefix");
+}
+read_prefix(\%TO_SHORT_PREFIX, \%TO_LONG_URI, @PREFIX_FILE);
+
+### Parse STDIN ###
+my $N_STDIN_COL = 0;
+if (-f $TMP_STDIN) {
+    if ($DB eq "-") {                                        # RDF
+    } elsif ($SPARQL_TEMPLATE and $SPARQL_TEMPLATE eq "-") { # SPARQL
+    } elsif ($STDIN =~ /^(.*)\n/) {                          # varibable bindings
+	my @f = split(/\t/, $1);
+	$N_STDIN_COL = @f;
+    }
+}
+
+################################################################################
+### Generate SPARQL query ######################################################
+################################################################################
+my $QUERY_SOURCE;
+
+my $SPARQL_QUERY = "";
+if ($OPT{i}) {
+    $SPARQL_QUERY .= "define input:inference \"$OPT{i}\"\n";
+}
+
+if ($SPARQL_TEMPLATE) {
+    if ($SPARQL_TEMPLATE =~ /\s/) {                          # string
+	$QUERY_SOURCE = "COMMAND-LINE ARGUMENT";
+	$SPARQL_QUERY .= $SPARQL_TEMPLATE;
+    } elsif ($SPARQL_TEMPLATE =~ /^(\S+?:)(\S+)$/) {         # library (URI)
+	if ($SPARQL_TEMPLATE =~ /^(http|https|ftp):\/\//) {
+	    $QUERY_SOURCE = $SPARQL_TEMPLATE;
+	} elsif ($SPARQL_TEMPLATE =~ /^(\S+?:)(\S+)$/) {
+	    my ($short_prefix, $identifier) = ($1, $2);
+	    if (! $TO_LONG_URI{$short_prefix}) {
+		die "unknown prefix '$short_prefix'\n";
+	    }
+	    $QUERY_SOURCE = "$TO_LONG_URI{$short_prefix}$identifier";
+	}
+	my $sparql_query = `curl -LsSf $QUERY_SOURCE 2>/dev/null`;
+	if (! $sparql_query) {
+	    $sparql_query = `curl -LsSf $QUERY_SOURCE.rq 2>/dev/null`;
+	    if (! $sparql_query) {
+		die "ERROR: cannot find SPARQL at $QUERY_SOURCE\n";
+	    }
+	    $QUERY_SOURCE = "$QUERY_SOURCE.rq";
+	}
+	$SPARQL_QUERY .= $sparql_query;
+    } elsif ($SPARQL_TEMPLATE =~ /^[\w]\S*$/) {              # library (local)
+	$QUERY_SOURCE = search_library($SPARQL_TEMPLATE);
+	$SPARQL_QUERY .= get_file_content($QUERY_SOURCE);
+    } elsif ($SPARQL_TEMPLATE eq "-") {                      # string from STDIN
+	! -f $TMP_STDIN and die "No query from STDIN\n";
+	$QUERY_SOURCE = "STDIN";
+	$SPARQL_QUERY .= $STDIN;
+    } elsif (-f $SPARQL_TEMPLATE) {                          # local file
+	$QUERY_SOURCE = $SPARQL_TEMPLATE;
+	$SPARQL_QUERY .= get_file_content($QUERY_SOURCE);
+    } else {
+	die "$SPARQL_TEMPLATE: invalid query\n";
+    }
+    $SPARQL_QUERY .= $OPT{L} ? "\nLIMIT $OPT{L}" : "";
+} else {
+    $QUERY_SOURCE = "SHORTCUT";
+    create_sparql_from_shortcuts(\$SPARQL_QUERY, $N_STDIN_COL, %OPT);
+}
+
+### No SPARQL query -> simple HTTP access to the URL ###
+if (! $SPARQL_QUERY) {
+    my $result = get_remote_file_content($DB, \%TO_SHORT_PREFIX, \%TO_LONG_URI, \%NICKNAME2URL, $SPANG_DIR,
+					 %FORMAT_OPT, client => $OPT{x}, w => $OPT{w}, debug => $OPT{q});
+    pretty_print($result, %OPT);
+    exit;
+}
+
+### Embed into template ###
+my %MISSING = ();
+my @EMBEDDED = ();
+embed_parameters(\$SPARQL_QUERY, \%MISSING, \@EMBEDDED, @PARAMETER);
+embed_values_stdin(\$SPARQL_QUERY, $STDIN, $N_STDIN_COL, \%MISSING);
+if ($MISSING{parameter}) {
+    my @default_parameter = extract_default_parameters($SPARQL_QUERY);
+    embed_parameters(\$SPARQL_QUERY, \%MISSING, \@EMBEDDED, @default_parameter);
+    if (! $MISSING{parameter}) {
+	print STDERR "WARNING: used default parameter (@default_parameter) in the template.\n"; # not precise
+    }
+}
+if ($MISSING{STDIN}) {
+    my ($values, $n_col) = extract_default_values($SPARQL_QUERY);
+    my $values_with_paren = embed_values_stdin(\$SPARQL_QUERY, $values, $n_col, \%MISSING);
+    if (! $MISSING{STDIN}) {
+	print STDERR "WARNING: used default values for stdin $values_with_paren in the template.\n"; # not precise ?
+    }
+}
+for (my $i=0; $i<@PARAMETER; $i++) {
+    unless ($EMBEDDED[$i]) {
+	print STDERR "WARNING: did not use the command-line argument '$PARAMETER[$i]'\n";
+    }
+}
+insert_prefix_declarations(\$SPARQL_QUERY, \%TO_LONG_URI);
+
+################################################################################
+### Run SPARQL query ###########################################################
+################################################################################
+
+### Judge if DB is Remote endpoint or Local file ###
+my $SEARCH_LOCAL_FILE = 0;
+if ($DB =~ /^\w/) {           # Remote endpoint
+    if ($DB !~ /^(http|https):\/\//) {
+	if ($NICKNAME2URL{$DB}) {
+	    if ($NICKNAME2METHOD{$DB} and $NICKNAME2METHOD{$DB} eq "GET") {
+		$OPT{g} = 1;
+	    }
+	    $DB = $NICKNAME2URL{$DB};
+	} else {
+	    die "$DB: unknown endpoint\n";
+	}
+    }
+} else {                      # Local file :  ./path/to  ~/path/to  /path/to  -
+    if ($DB eq "-") {
+	! -f $TMP_STDIN and die "No data from STDIN\n";
+	$DB = $TMP_STDIN;
+    }
+    ! -f $DB and die "$DB: no such file\n";
+    $SEARCH_LOCAL_FILE = 1;
+}
+
+### Debug before running the query ##
+if ($OPT{q}) {
+    print_debug_info($DB, $QUERY_SOURCE, $SPARQL_QUERY, %OPT);
+    exit;
+}
+if ($OPT{g} and $OPT{d}) {
+    submit_sparql_by_curl($DB, $SPARQL_QUERY, %FORMAT_OPT, key => $OPT{k}, debug => 1);
+    exit;
+}
+if ($MISSING{parameter}) {
+    print STDERR "missing the parameter\n";
+    exit 1;
+}
+if ($MISSING{STDIN}) {
+    print STDERR "missing values from STDIN\n";
+    exit 1;
+}
+
+my $RESULT;
+if ($SEARCH_LOCAL_FILE) {
+    $RESULT = `sparql --data $DB --results $OPT{f} '$SPARQL_QUERY'`;
+    $OPT{f} eq "tsv" && ! $OPT{v} and
+	$RESULT =~ s/^\?.*\n//; # remove variable names
+} else {
+    if ($OPT{Q}) {
+	submit_sparql($DB, $SPARQL_QUERY, %CONNECT_OPT, %FORMAT_OPT, recursive => $PROGRAM);
+    } elsif ($OPT{I} or $OPT{D}) {
+	submit_sparql_insert_delete($DB, $SPARQL_QUERY, %CONNECT_OPT);
+    } elsif ($OPT{g}) {
+	$RESULT = submit_sparql_by_curl($DB, $SPARQL_QUERY, %FORMAT_OPT, key => $OPT{k});
+    } else {
+	$RESULT = submit_sparql($DB, $SPARQL_QUERY, %CONNECT_OPT, %FORMAT_OPT);
+    }
+}
+
+if ($RESULT) {
+    if ($OPT{f} =~ /^(n-triples|nt|tsv)$/) {
+	$RESULT = abbrev_result($RESULT, \%TO_SHORT_PREFIX, %FORMAT_OPT);
+    }
+    pretty_print($RESULT, %OPT);
+}
+
+################################################################################
+### Functions ##################################################################
+################################################################################
+
+sub create_sparql_from_shortcuts {
+    my ($r_sparql, $n_stdin_col, %opt) = @_;
+
+    my ($s, $p, $o, $input, @output);
+
+    if ($opt{V}) {
+	($s, $p, $o) = get_s_p_o($n_stdin_col, %opt);
+	@output = get_unfixed_s_p_o($n_stdin_col, %opt);
+	$input = get_input_filter($n_stdin_col, %opt);
+    } else {
+	($s, $p, $o) = get_s_p_o_or_v($n_stdin_col, %opt);
+	@output = (create_variables($n_stdin_col), get_undefined_s_p_o(%opt));
+	$input = get_input_values($n_stdin_col, %opt);
+    }
+
+    my $triple_pattern = "$s $p $o";
+    my $triple_pattern_to_find = $triple_pattern;
+    if ($opt{T}) {
+	$triple_pattern_to_find .= "; a " . bracket_uri($opt{T});
+    }
+    if ($opt{A}) {
+	$triple_pattern_to_find .= " . ?o ?p2 ?o2";
+	push @output, "?p2", "?o2";
+    }
+
+    my $from = $opt{F} ? "\nFROM " . bracket_uri($opt{F}) : "";
+    my $limit = $opt{L} ? "\nLIMIT $opt{L}" : "";
+
+    if ($opt{C}) {
+	if ($opt{S} or $opt{P} or $opt{O} or $opt{L} or $opt{F}) {
+	    ${$r_sparql} .= "CONSTRUCT {\n    $triple_pattern\n}$from\nWHERE {$input\n    $triple_pattern_to_find\n}$limit";
+	} else {
+	    ${$r_sparql} = "";
+	}
+    } else {
+	if ($opt{N}) {
+	    ${$r_sparql} .= "SELECT COUNT(*)$from\nWHERE {$input\n    $triple_pattern_to_find\n}";
+	} elsif ($opt{G}) {
+	    ${$r_sparql} .= "SELECT ?graph\nWHERE {\n    GRAPH ?graph {\n        $triple_pattern_to_find\n    }\n}\nGROUP BY ?graph\nORDER BY ?graph";
+	} elsif ($opt{X}) {
+	    ${$r_sparql} = get_file_content(search_library('resource_links'));
+	    @PARAMETER = bracket_uri($opt{X});
+	} elsif ($opt{S} or $opt{P} or $opt{O} or $opt{L} or $opt{F} or $opt{T}) {
+	    ${$r_sparql} .= "SELECT @output$from\nWHERE {$input\n    $triple_pattern_to_find\n}$limit";
+	} elsif ($opt{Q}) {
+	    ${$r_sparql} .= "CONSTRUCT { ?s ?p ?o } FROM ".bracket_uri($opt{Q})." WHERE { ?s ?p ?o }";
+	} elsif ($opt{I}) {
+	    ${$r_sparql} .= "INSERT DATA { GRAPH ".bracket_uri($opt{I})." { $STDIN } }";
+	} elsif ($opt{D}) {
+	    ${$r_sparql} .= "DELETE DATA { GRAPH ".bracket_uri($opt{D})." { $STDIN } }";
+	} else {
+	    ${$r_sparql} = "";
+	}
+    }
+}
+
+sub get_input_values {
+    my ($n_stdin_col, %opt) = @_;
+
+    my $input_values = "";
+
+    if (is_int($opt{S}) || is_int($opt{P}) || is_int($opt{O})) {
+	my @v = create_variables($n_stdin_col);
+	$input_values = "\n    VALUES (@v) { \$STDIN }";
+    }
+
+    return $input_values;
+}
+
+sub get_input_filter {
+    my ($n_stdin_col, %opt) = @_;
+
+    my $input_filter = "";
+
+    is_int($opt{S}, max => $n_stdin_col) and $input_filter = "\n    FILTER ((?s) IN (\$v$opt{S}))";
+    is_int($opt{P}, max => $n_stdin_col) and $input_filter = "\n    FILTER ((?p) IN (\$v$opt{P}))";
+    is_int($opt{O}, max => $n_stdin_col) and $input_filter = "\n    FILTER ((?o) IN (\$v$opt{O}))";
+
+    return $input_filter;
+}
+
+### not used ###
+sub get_input_values_and_output {
+    my ($n_stdin_col, %opt) = @_;
+
+    my %col = ();
+    ($opt{S} && $opt{S} =~ /^(\d+)$/) and ($col{$1} = 's', $col{s} = $1);
+    ($opt{P} && $opt{P} =~ /^(\d+)$/) and ($col{$1} = 'p', $col{p} = $1);
+    ($opt{O} && $opt{O} =~ /^(\d+)$/) and ($col{$1} = 'o', $col{o} = $1);
+
+    my @vars = ();
+    my @output = ();
+    for (my $i=1; $i<=$n_stdin_col; $i++) {
+    	if ($col{$i} and $col{$i} eq 's') {
+    	    push @vars, '?s';
+    	    push @output, '?s';
+    	    if (! $col{p}) {
+    		! $opt{P} and push @output, '?p';
+    		if (! $col{o}) {
+    		    ! $opt{O} and push @output, '?o';
+    		}
+    	    }
+    	} elsif ($col{$i} and $col{$i} eq 'p') {
+    	    push @vars, '?p';
+    	    if (! $col{s}) {
+    		! $opt{S} and push @output, '?s';
+    	    }
+    	    push @output, '?p';
+    	    if (! $col{o}) {
+    		! $opt{O} and push @output, '?o';
+    	    }
+    	} elsif ($col{$i} and $col{$i} eq 'o') {
+    	    push @vars, '?o';
+    	    if (! $col{s} and ! $col{p}) {
+    		! $opt{S} and push @output, '?s';
+    		! $opt{P} and push @output, '?p';
+    	    }
+    	    push @output, '?o';
+    	} else {
+    	    push @vars, "?v$i";
+    	    push @output, "?v$i";
+    	}
+    }
+
+    my $input_values = "";
+    @vars and $input_values = "\n    VALUES (@vars) { \$STDIN }";
+
+    return($input_values, @output);
+}
+
+sub bracket_uri {
+    my ($uri) = @_;
+
+    # if ($uri =~ /^((http|https|ftp):\/\/.*)/) {
+    if ($uri =~ /^[a-zA-Z]+:\/\/\S.+/) {
+	return "<$uri>";
+    } else {
+	return $uri;
+    }
+}
+
+sub create_variables {
+    my ($n) = @_;
+
+    my @v = ();
+    for (my $i=1; $i<=$n; $i++) {
+	push @v, "?v$i";
+    }
+
+    return @v;
+}
+
+### Handling -S -P -O  options ##
+sub get_undefined_s_p_o {
+    my (%opt) = @_;
+
+    my @var = ();
+
+    ! defined $opt{S} and push @var, '?s';
+    ! defined $opt{P} and push @var, '?p';
+    ! defined $opt{O} and push @var, '?o';
+
+    return @var;
+}
+
+sub is_int {
+    my ($x, %opt) = @_;
+
+    if ($x and $x =~ /^(\d+)$/) {
+	if (defined $opt{max}) {
+	    $1 > $opt{max} and die "ERROR: only $opt{max} columns\n";
+	}
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+sub get_unfixed_s_p_o {
+    my ($n_stdin_col, %opt) = @_;
+
+    my @var = ();
+
+    (! defined $opt{S} || is_int($opt{S}, max => $n_stdin_col)) and push @var, '?s';
+    (! defined $opt{P} || is_int($opt{P}, max => $n_stdin_col)) and push @var, '?p';
+    (! defined $opt{O} || is_int($opt{O}, max => $n_stdin_col)) and push @var, '?o';
+
+    return @var;
+}
+
+sub get_s_p_o {
+    my ($n_stdin_col, %opt) = @_;
+
+    my ($s, $p, $o);
+
+    if (! $opt{S} || is_int($opt{S}, max => $n_stdin_col)) {
+	$s = '?s';
+    } else {
+	$s = bracket_uri($opt{S});
+    }
+
+    if (! $opt{P} || is_int($opt{P}, max => $n_stdin_col)) {
+	$p = '?p';
+    } else {
+	$p = bracket_uri($opt{P});
+    }
+
+    if (! $opt{O} || is_int($opt{O}, max => $n_stdin_col)) {
+	$o = '?o';
+    } else {
+	$o = bracket_uri($opt{O});
+    }
+
+    return ($s, $p, $o);
+}
+
+sub get_s_p_o_or_v {
+    my ($n_stdin_col, %opt) = @_;
+
+    my ($s, $p, $o);
+
+    if (! $opt{S}) {
+	$s = '?s';
+    } elsif (is_int($opt{S}, max => $n_stdin_col)) {
+	$s = "?v$opt{S}";
+    } else {
+	$s = bracket_uri($opt{S});
+    }
+
+    if (! $opt{P}) {
+	$p = '?p';
+    } elsif (is_int($opt{P}, max => $n_stdin_col)) {
+	$p = "?v$opt{P}";
+    } else {
+	$p = bracket_uri($opt{P});
+    }
+
+    if (! $opt{O}) {
+	$o = '?o';
+    } elsif (is_int($opt{O}, max => $n_stdin_col)) {
+	$o = "?v$opt{O}";
+    } else {
+	$o = bracket_uri($opt{O});
+    }
+
+    return ($s, $p, $o);
+}
+
+# obsolete
+sub change_s_p_o {
+    my ($s, $p, $o, %opt) = @_;
+
+    if ($opt{S} && $opt{S} =~ /^(\d+)$/) {
+	$s = "?v$1";
+    }
+    if ($opt{P} && $opt{P} =~ /^(\d+)$/) {
+	$p = "?v$1";
+    }
+    if ($opt{O} && $opt{O} =~ /^(\d+)$/) {
+	$o = "?v$1";
+    }
+
+    return($s, $p, $o);
+}
+
+### print ###
+sub pretty_print {
+    my ($result, %opt) = @_;
+
+    my $filter = "";
+    $opt{c} and $filter .= "| $SPANG_DIR/bin/align_column";
+    $opt{s} and $filter .= "| sort";
+    
+    if ($filter) {
+	open(PIPE, "$filter") || die;
+	print PIPE $result;
+	close(PIPE);
+    } else {
+    	print $result;
+    }
+}
+
+sub print_debug_info {
+    my ($db, $query_source, $query, %opt) = @_;
+
+    my @format_opt = ();
+    $opt{f} and push(@format_opt, "-f $opt{f}");
+    $opt{a} and push(@format_opt, "-a");
+    $opt{b} and push(@format_opt, "-b");
+    $opt{c} and push(@format_opt, "-c");
+    $opt{v} and push(@format_opt, "-v");
+
+    print STDERR "FORMAT  @format_opt\n" if @format_opt;
+    print STDERR "DB      $db\n";
+    print STDERR "SPARQL  $query_source\n";
+    print STDERR "--\n";
+    print $query;
+}
+
+### read ###
+
+# Make sure to tokenize the first argument
+# (Tokenization of the first argument is possibly incomplete, depending on environments)
+sub tokenize_first_arg {
+    my ($r_arg) = @_;
+
+    if (@{$r_arg}) {
+	my $first = shift @{$r_arg};
+	unshift @{$r_arg}, split(/\s+/, $first);
+    }
+}
+
+sub get_file_content {
+    my ($file) = @_;
+
+    open(INPUT, $file) or die "$file: $!\n";
+    my @content = <INPUT>;
+    close(INPUT);
+
+    my $content = join("", @content);
+
+    return $content;
+}
+
+sub save_stdin {
+    my ($tmp_stdin) = @_;
+
+    my @data = <STDIN>;
+    my $data = join("", @data);
+
+    open(TMP_STDIN, ">$tmp_stdin") || die "$tmp_stdin: $!";
+    print TMP_STDIN $data;
+    close(TMP_STDIN);
+
+    return $data;
+}
+
+sub search_library {
+    my ($name) = @_;
+
+    if (-d "$ENV{HOME}/.spang/query") {
+	print STDERR "WARNING: $ENV{HOME}/.spang/query/ is obsolete. Use $ENV{HOME}/.spang/template/ instead.\n";
+    }
+    for my $library (@LIBRARY) {
+	if (-f "$library/$name" && -s "$library/$name") {
+	    return "$library/$name";
+	} elsif (-z "$library/$name") {
+	    die "ERROR: $library/$name is empty.\n";
+	}
+	if (-f "$library/$name.rq" && -s "$library/$name.rq") {
+	    return "$library/$name.rq";
+	} elsif (-z "$library/$name.rq") {
+	    die "ERROR: $library/$name.rq is empty.\n";
+	}
+    }
+
+    die "Cannot find '$name' in the local library (", join(", ", @LIBRARY), ")\n";
+}
+
+sub read_config {
+    my ($config, $r_library) = @_;
+
+    my @library = ();
+    if (-f $config) {
+	open(CONFIG, $config) || die;
+	while (<CONFIG>) {
+	    chomp;
+	    if (/^\s*#/) {
+		next;
+	    }
+	    if (/^\s*(\S+)\s+(\S.*)/) {
+		my ($key, $val) = ($1, $2);
+		if ($val =~ /^~\/(\S.*)/) {
+		    $val = "$ENV{HOME}/$1";
+		}
+		if ($key eq "template" || $key eq "library") {
+		    push @library, $val;
+		}
+	    }
+	}
+	close(CONFIG);
+	
+	if (@library) {
+	    @{$r_library} = (@library, @{$r_library});
+	}
+    }
+}

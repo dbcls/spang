@@ -1,0 +1,69 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: cat RDF_XML | $PROGRAM [-v]
+
+Count triples of RDF/XML file.
+
+Requirements:
+CountRDF
+\@CLASS_PATH in this Perl script should be set appropriately.
+
+";
+
+my @CLASS_PATH = ("$ENV{HOME}/research/packages/apache-jena-2.12.0/lib/*",
+		  "$ENV{HOME}/research/packages/CountRDF.jar");
+my $CLASS_NAME = "jp.ac.rois.dbcls.CountRDF";
+
+# Hidden options
+# -d : print debug info and exit
+
+### Settings ###
+my %OPT;
+getopts('vd', \%OPT);
+
+my $TMP_DIR = "/tmp";
+$ENV{TMP} and -d $ENV{TMP} and
+    $TMP_DIR = $ENV{TMP};
+
+my $TMP_INPUT = "$TMP_DIR/$PROGRAM.$$";
+my $TMP_ERR = "$TMP_DIR/$PROGRAM.err.$$";
+END {
+    $TMP_INPUT && -f $TMP_INPUT and
+	unlink $TMP_INPUT;
+    $TMP_ERR && -f $TMP_ERR and
+	unlink $TMP_ERR;
+}
+
+### Main ###
+-t and die $USAGE;
+system "cat > $TMP_INPUT";
+
+my $CLASS_PATH = join(':', @CLASS_PATH);
+my $COMMAND = "java -cp '$CLASS_PATH' $CLASS_NAME $TMP_INPUT";
+
+if ($OPT{d}) {
+    print "$COMMAND\n";
+    exit;
+}
+
+if ($OPT{v}) {
+    system "$COMMAND";
+} else {
+    my $result = `$COMMAND 2> $TMP_ERR`;
+    my $exit_value = $? >> 8;
+    if ($exit_value != 0) {
+	print $result;
+    	my $err = `cat $TMP_ERR`;
+    	print STDERR $err;
+    	exit($exit_value);
+    } else {
+	chomp($result);
+	if ($result =~ /^Total (\d+) triples.$/m) {
+	    print "$1\n";
+	}
+    }
+}

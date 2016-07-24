@@ -1,0 +1,7 @@
+# Filter UniProt IDs by GO annotation
+#param GO_0045202
+SELECT ?uniprot
+WHERE {
+    VALUES (?uniprot) { $STDIN }
+    ?uniprot up:classifiedWith obo:$1 .
+}

@@ -1,0 +1,7 @@
+# Free text search in Virtuoso
+SELECT ?instance ?text
+WHERE {
+    ?instance rdfs:label ?text .
+    ?text bif:contains '"$1"' .
+}
+ORDER BY ?text

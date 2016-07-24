@@ -1,0 +1,9 @@
+# Regex search of labels (for a specific class)
+#param mbgd:CompleteGenome E.coli
+SELECT DISTINCT ?resource ?label
+WHERE {
+    ?resource a $1 ;
+              rdfs:label ?label .
+    FILTER (regex(str(?label), "$2", "i"))
+}
+ORDER BY ?resource

@@ -1,0 +1,46 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+use Encode;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: $PROGRAM [INPUT_TSV]
+";
+
+my %OPT;
+getopts('', \%OPT);
+
+my @MAX_LEN = ();
+my @TABLE = ();
+my @LEN = ();
+
+### Read
+!@ARGV && -t and die $USAGE;
+my $i = 0;
+while (<>) {
+    chomp;
+    my @f = split("\t", $_);
+    push @TABLE, \@f;
+    for (my $j=0; $j<@f; $j++) {
+	my $len = length(decode_utf8($f[$j])); # to count multi-bite characters, decoding to utf8 flagged string is necessary
+	$LEN[$i][$j] = $len;
+	if (! defined $MAX_LEN[$j]) {
+	    $MAX_LEN[$j] = $len;
+	} elsif ($len > $MAX_LEN[$j]) {
+	    $MAX_LEN[$j] = $len;
+	}
+    }
+    $i ++;
+}
+
+### Print
+for (my $i=0; $i<@TABLE; $i++) {
+    my $last_col = @{$TABLE[$i]} - 1;
+    for (my $j=0; $j<$last_col; $j++) {
+	my $n_padding = $MAX_LEN[$j] - $LEN[$i][$j] + 2; # two or more white spaces
+	print $TABLE[$i][$j], " " x $n_padding;
+    }
+    $last_col >= 0 and print $TABLE[$i][$last_col];
+    print "\n";
+}

@@ -1,0 +1,65 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: cat RDF_XML | $PROGRAM [-v]
+
+Converts RDF/XML into N-triples format.
+
+Requirements:
+ConvRDF (https://github.com/dbcls/ConvRDF)
+\@CLASS_PATH in this Perl script should be set appropriately.
+
+";
+
+my @CLASS_PATH = ("$ENV{HOME}/research/packages/apache-jena-2.12.0/lib/*",
+		  "$ENV{HOME}/research/packages/ConvRDF.jar");
+my $CLASS_NAME = "jp.ac.rois.dbcls.ConvRDF";
+
+# Hidden options
+# -d : print debug info and exit
+# -a : abbreviate URIs using predefined prefixes
+
+### Settings ###
+my %OPT;
+getopts('vda', \%OPT);
+
+my $TMP_DIR = "/tmp";
+$ENV{TMP} and -d $ENV{TMP} and
+    $TMP_DIR = $ENV{TMP};
+
+my $TMP_INPUT = "$TMP_DIR/$PROGRAM.$$";
+my $TMP_ERR = "$TMP_DIR/$PROGRAM.err.$$";
+END {
+    $TMP_INPUT && -f $TMP_INPUT and
+	unlink $TMP_INPUT;
+    $TMP_ERR && -f $TMP_ERR and
+	unlink $TMP_ERR;
+}
+
+### Main ###
+-t and die $USAGE;
+system "cat > $TMP_INPUT";
+
+my $CLASS_PATH = join(':', @CLASS_PATH);
+my $COMMAND = "java -cp '$CLASS_PATH' $CLASS_NAME $TMP_INPUT";
+! $OPT{v} and $COMMAND .= " 2> $TMP_ERR";
+$OPT{a} and $COMMAND .= " | abbrev_prefix";
+
+if ($OPT{d}) {
+    print "$COMMAND\n";
+    exit;
+}
+
+system "$COMMAND";
+
+if (! $OPT{v}) {
+    my $exit_value = $? >> 8;
+    if ($exit_value != 0) {
+    	my $err = `cat $TMP_ERR`;
+    	print STDERR $err;
+    	exit($exit_value);
+    }
+}

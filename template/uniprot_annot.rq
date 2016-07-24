@@ -1,0 +1,10 @@
+# Get UniProt annotations
+#param P02649
+SELECT ?gene ?organism ?function
+WHERE {
+    uniprot:$1 up:encodedBy/skos:prefLabel ?gene ;
+               up:organism/up:scientificName ?organism ;
+               up:annotation ?annot .
+    ?annot a up:Function_Annotation ;
+   	  rdfs:comment ?function .
+}

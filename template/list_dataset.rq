@@ -1,0 +1,12 @@
+# List of datasets
+SELECT ?dataset ?title ?description
+WHERE {
+    ?dataset a void:Dataset .
+    OPTIONAL {
+        ?dataset dct:title ?title .
+    }
+    OPTIONAL {
+        ?dataset dct:description ?description .
+    }
+}
+ORDER BY ?dataset

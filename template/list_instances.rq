@@ -1,0 +1,6 @@
+# List instances of a specific class
+#param up:Taxon
+SELECT ?instances
+WHERE {
+    ?instance a $1 .
+}

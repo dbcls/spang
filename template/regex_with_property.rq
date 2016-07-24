@@ -1,0 +1,7 @@
+# Regex search of text (for a specific class)
+SELECT *
+WHERE {
+    ?resource $1 ?text .
+    FILTER (regex(str(?text), "$2", "i"))
+}
+ORDER BY ?resource

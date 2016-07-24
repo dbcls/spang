@@ -1,0 +1,19 @@
+#!/usr/bin/perl -w
+use strict;
+use File::Basename;
+use Getopt::Std;
+use Encode;
+my $PROGRAM = basename $0;
+my $USAGE=
+"Usage: $PROGRAM
+";
+
+my %OPT;
+getopts('', \%OPT);
+
+my @INPUT = <>;
+my $INPUT = join("", @INPUT);
+
+$INPUT =~ s/\\u([0-9A-Za-z][0-9A-Za-z][0-9A-Za-z][0-9A-Za-z])/Encode::encode_utf8(chr(hex($1)))/eg;
+
+print $INPUT;

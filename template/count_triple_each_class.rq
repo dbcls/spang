@@ -1,0 +1,8 @@
+# List of classes with counts
+SELECT (COUNT(?class) AS ?count) ?class
+WHERE {
+    ?resource a ?class ;
+              ?p ?o .
+}
+GROUP BY ?class
+ORDER BY DESC(?count)

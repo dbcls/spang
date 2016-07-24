@@ -1,0 +1,7 @@
+# Free text search in Virtuoso (for a specific class)
+SELECT ?resource ?text
+WHERE {
+    ?resource $1 ?text .
+    ?text bif:contains '"$2"' .
+}
+ORDER BY ?text

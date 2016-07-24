@@ -1,0 +1,16 @@
+# Get super-classes or super-properties
+#param tax:511145
+SELECT DISTINCT ?level ?term ?label
+WHERE {
+    {
+	?term rdfs:subClassOf $1 option(transitive, t_direction 1, t_min 0, t_step("step_no") as ?level) . # only for Virtuoso
+    }
+    UNION
+    {
+	?term rdfs:subPropertyOf $1 option(transitive, t_direction 1, t_min 0, t_step("step_no") as ?level) . # only for Virtuoso
+    }
+    OPTIONAL {
+    	?term rdfs:label ?label
+    }
+}
+ORDER BY ?level
