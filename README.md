@@ -45,6 +45,9 @@ Web site: http://purl.org/net/spang
 ```
     pbpaste | spang uniprot -
 ```  
+## Reference
+Hirokazu Chiba and Ikuo Uchiyama. SPANG: a SPARQL client supporting generation and reuse of queries for distributed RDF databases. *BMC Bioinformatics*, 18:93 (2017).
+
 <br>
 Copyright (c) 2015 Hirokazu Chiba  <br>
 Released under the MIT license  <br>
