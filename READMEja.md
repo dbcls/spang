@@ -36,7 +36,7 @@ SPANGは、UNIXコマンドライン環境で利用可能なSPARQLクライア�
 ```
     spang mbgd 'select * where {?s ?p ?o} limit 10'
 ```
-- クリップボードを利用してコピーしたSPARQLを実行する
+- クリップボードにコピーしたSPARQLを実行する
 ```
     pbpaste | spang uniprot -
 ```  
