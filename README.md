@@ -4,7 +4,7 @@ SPANG is a command-line SPARQL client supporting query generation for distribute
 See also [Wiki](https://github.com/dbcls/spang/wiki/SPANG)
 
 ## Getting started
-- Download [spang-0.4.5.tgz](http://purl.org/net/spang-0.4.5.tgz) and uncompress it
+- Download [spang-0.4.5.tgz](http://spang.dbcls.jp/spang-0.4.5.tgz) and uncompress it
 - Add `spang-0.4.5/bin` directory to the command path
 - To see available command-line options, simply type
 `
