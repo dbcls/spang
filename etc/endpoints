@@ -1,5 +1,5 @@
 dbpedia http://dbpedia.org/sparql
-uniprot http://sparql.uniprot.org
+uniprot https://sparql.uniprot.org
 allie http://data.allie.dbcls.jp/sparql
 atlas http://www.ebi.ac.uk/rdf/services/atlas/sparql
 chembl http://www.ebi.ac.uk/rdf/services/chembl/sparql
