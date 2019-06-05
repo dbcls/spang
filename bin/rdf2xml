@@ -4,7 +4,6 @@ use File::Basename;
 use Getopt::Std;
 my $PROGRAM = basename $0;
 my $USAGE=
-my $USAGE=
 "Usage: cat RDF | $PROGRAM
 
 -i FORMAT (guess the input format by default)
