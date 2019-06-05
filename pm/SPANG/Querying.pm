@@ -101,6 +101,8 @@ sub submit_sparql {
     my $response = $agent->request($request);
     if (! $response->is_success) {
 	print STDERR $response->status_line, "\n";
+	print STDERR "--\n";
+	print STDERR $response->content;
 	return;
     }
 
