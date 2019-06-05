@@ -67,6 +67,7 @@ OPTION
 # -d : debug (use with GET method)
 # -n : do not read user-defined prefix file
 # -k KEY : API key (for BioPortal)
+# -m MACRO_GRAPH: include macro graph for inference
 
 my $DESCRIPTION = '
 SPARQL_TEMPLATE
@@ -201,7 +202,7 @@ while (@ARGV and $ARGV[0] !~ /^-/) {
 
 ### Options ###
 my %OPT;
-getopts('S:P:O:F:L:NGf:abqr:i:t:u:p:vlhX:T:AQ:I:D:Vnx:wcsCgdk:', \%OPT);
+getopts('S:P:O:F:L:NGf:abqr:i:t:u:p:vlhX:T:AQ:I:D:Vnx:wcsCgdk:m:', \%OPT);
 
 if (! defined $OPT{f}) {
     # default file format
@@ -252,6 +253,9 @@ my $QUERY_SOURCE;
 my $SPARQL_QUERY = "";
 if ($OPT{i}) {
     $SPARQL_QUERY .= "define input:inference \"$OPT{i}\"\n";
+}
+if ($OPT{m}) {
+    $SPARQL_QUERY .= "define input:macro-lib <$OPT{m}>\n";
 }
 
 if ($SPARQL_TEMPLATE) {
