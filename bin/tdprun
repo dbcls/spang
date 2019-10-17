@@ -11,33 +11,24 @@ use SPANG::Prefix;
 my $PROGRAM = basename $0;
 my $USAGE=
 "USAGE
-  $PROGRAM ENDPOINT [GRAPH]
+  $PROGRAM ENDPOINT [GRAPH(s)]
 
 ENDPOINT
   SPARQL endpoint in nickname or full URL
 
-GRAPH
+GRAPH(s)
   Graph name in full URI or in prefixed URI
 
 Requirements
   TripleDataProfiler (https://bitbucket.org/yayamamo/tripledataprofiler)
-  Apache Commons CLI
-  Apache Commons Lang
-  Apache Jena
-  \@CLASS_PATH in this Perl script should be set appropriately.
 
 ";
 
-my @CLASS_PATH = ("$ENV{HOME}/research/packages/commons-cli-1.2/commons-cli-1.2.jar",
-		  "$ENV{HOME}/research/packages/commons-lang3-3.3.2/commons-lang3-3.3.2.jar",
-		  "$ENV{HOME}/research/packages/apache-jena-2.12.0/lib/*",
-		  "$ENV{HOME}/research/packages/TripleDataProfiler/src");
-
-my $CLASS_NAME = "jp/ac/rois/dbcls/TripleDataProfiler";
+my $JAR_FILE = "$SPANG_DIR/lib/TripleDataProfiler.jar";
 
 ### Settings ###
 my %OPT;
-getopts('', \%OPT);
+getopts('q', \%OPT);
 
 my @ENDPOINT_FILE = ("$SPANG_DIR/etc/endpoints", "$ENV{HOME}/.spang/endpoints");
 my %NICKNAME2URL = ();
@@ -52,21 +43,23 @@ read_prefix(\%GET_SHORT_PREFIX, \%GET_LONG_PREFIX, @PREFIX_FILE);
 
 ### Main ###
 !@ARGV and die $USAGE;
-my ($ENDPOINT, $GRAPH) = @ARGV;
-if (! defined $GRAPH) {
-    $GRAPH = "";
-}
+my ($ENDPOINT, @GRAPH) = @ARGV;
 
 if ($NICKNAME2URL{$ENDPOINT}) {
     $ENDPOINT = $NICKNAME2URL{$ENDPOINT};
 }
 
-if ($GRAPH =~ /^(\w+:)(.*)/) {
-    my ($short_prefix, $name) = ($1, $2);
-    if ($GET_LONG_PREFIX{$short_prefix}) {
-	$GRAPH = $GET_LONG_PREFIX{$short_prefix} . $name;
+for (my $i=0; $i<@GRAPH; $i++) {
+    if ($GRAPH[$i] =~ /^(\w+:)(.*)/) {
+	my ($short_prefix, $name) = ($1, $2);
+	if ($GET_LONG_PREFIX{$short_prefix}) {
+	    $GRAPH[$i] = $GET_LONG_PREFIX{$short_prefix} . $name;
+	}
     }
 }
 
-my $CLASS_PATH = join(':', @CLASS_PATH);
-system "java -cp '$CLASS_PATH' $CLASS_NAME -sbm $ENDPOINT $GRAPH"
+if ($OPT{q}) {
+    print "java -jar $JAR_FILE -sbm $ENDPOINT @GRAPH\n";
+} else {
+    system "java -jar $JAR_FILE -sbm $ENDPOINT @GRAPH";
+}
