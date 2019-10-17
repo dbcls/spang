@@ -46,7 +46,11 @@ while (my $line = <STDIN>) {
 	if (defined $subject_class && defined $object_class && defined $triples && $PROPERTY ne "") {
 	    $subject_class =~ /^rdfs:Resource$/ and $subject_class .= $INDEX++;
 	    $object_class =~ /^(rdfs:Literal|rdfs:Resource)$/ and $object_class .= $INDEX++;
-	    $EDGE{$subject_class}{$object_class} = "$PROPERTY\\n  $triples";
+	    if ($EDGE{$subject_class}{$object_class}) {
+		push @{$EDGE{$subject_class}{$object_class}}, "$PROPERTY\\n  $triples";
+	    } else {
+		$EDGE{$subject_class}{$object_class} = ["$PROPERTY\\n  $triples"];
+	    }
 	    $VERTEX{$subject_class} = 1;
 	    $VERTEX{$object_class} = 1;
 	}
@@ -64,8 +68,9 @@ print "\n";
 print "    // Class relations with the numbers of edges\n";
 for my $subject_class (sort {$a cmp $b} keys %EDGE) {
     for my $object_class (sort {$a cmp $b} keys %{$EDGE{$subject_class}}) {
-	my $label = $EDGE{$subject_class}{$object_class};
-	print "    \"$subject_class\" -> \"$object_class\" \[ label=\"$label\"\];\n";
+	for my $label (@{$EDGE{$subject_class}{$object_class}}) {
+	    print "    \"$subject_class\" -> \"$object_class\" \[ label=\"$label\"\];\n";
+	}
     }
 }
 print "\n";
