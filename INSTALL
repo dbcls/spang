@@ -1,0 +1,36 @@
+Just download or clone the 'spang' repository, and make path to the
+executable files in the 'spang/bin' directory.
+Just make sure that the 'spang/bin' directory is in the command path.
+
+Example in the case of bash:
+$ cd ~                 # any directory you like to install spang
+$ git clone https://github.com/dbcls/spang
+$ ~/spang/bin/spang    # See if the main spang command is executable
+$ export PATH=$HOME/spang/bin:$PATH # Make path the executable files
+
+Installation of requied Perl modules:
+In typical Unix environmets, spang will run out of the box. But in
+some environment, you may have an error message like:
+ Can't locate LWP/UserAgent.pm in @INC
+It means the Perl module is missing. In such cases, install the
+necessary Perl modules using system like cpanm. If you don't have
+cpanm command, install as follows:
+$ cd ~/bin
+$ curl -L https://cpanmin.us/ -o cpanm
+$ chmod +x cpanm
+$ export PERL_CPANM_OPT="--local-lib=~/perl5"     # cpanm installs modules here
+$ export PERL5LIB=$HOME/perl5/lib/perl5:$PERL5LIB # Perl scripts find modules here
+$ ~/bin/cpanm LWP/UserAgent.pm                    # install the Perl module
+$ ~/spang/bin/spang    # See if the main spang command is executable
+
+Installation of requied Java Archive(.jar) files:
+Some additional commands included in spang package require Java
+Archive files imported from other projects.
+'rdf2nt-huge' command requires ConvRDF (https://github.com/dbcls/ConvRDF).
+'tdprun' command requires TripleDataProfiler (https://bitbucket.org/yayamamo/tripledataprofiler).
+Download the .jar files and place them in the 'spang/lib' directory.
+$ cd ~/spang/lib
+$ curl -LO https://github.com/dbcls/ConvRDF/raw/master/ConvRDF.jar
+$ curl -RO https://bitbucket.org/yayamamo/tripledataprofiler/raw/7550bf65a70d569373ae466c8f0b0f5f9b399527/TripleDataProfiler.jar
+$ ls
+ConvRDF.jar  TripleDataProfiler.jar
