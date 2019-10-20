@@ -1,2 +1,1 @@
-lib/ConvRDF.jar
-lib/TripleDataProfiler.jar
+lib/*.jar
