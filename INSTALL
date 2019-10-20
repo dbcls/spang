@@ -3,10 +3,10 @@ executable files in the 'spang/bin' directory.
 Just make sure that the 'spang/bin' directory is in the command path.
 
 Example in the case of bash:
-$ cd ~                 # any directory you like to install spang
+$ cd ~               # any directory where you like to install spang
 $ git clone https://github.com/dbcls/spang
-$ ~/spang/bin/spang    # See if the main spang command is executable
-$ export PATH=$HOME/spang/bin:$PATH # Make path the executable files
+$ ~/spang/bin/spang  # See if the main spang command works
+$ export PATH=$HOME/spang/bin:$PATH  # Set path the executable files
 
 Installation of requied Perl modules:
 In typical Unix environmets, spang will run out of the box. But in
