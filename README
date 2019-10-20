@@ -1,14 +1,11 @@
-SPANG: a command-line SPARQL client supporting query generation for distributed RDF databases
+SPANG is an easy-to-use command-line SPARQL client.
 
-Project URL: http://purl.org/net/spang 
+Getting started:
+$ git clone https://github.com/dbcls/spang
+$ ./spang/bin/spang   # See if the main spang command works
+Set path to the 'spang/bin' directly.
 
-Getting started
-- Download spang-*-*-*.tgz and uncompress it
-- Add spang-*-*-*/bin directory to the command path
-- To see available command-line options, simply type
-    spang
-
-Examples
+Examples:
 - Using SPARQL shortcuts
     spang uniprot -S tax:511145
     spang uniprot -S tax:511145 -a
@@ -39,6 +36,6 @@ Examples
 - Using SPARQL code saved in clipboard
     pbpaste | spang uniprot -
 
-Copyright (c) 2015 Hirokazu Chiba
+Copyright (c) 2015-2019 Hirokazu Chiba
 Released under the MIT license
 http://opensource.org/licenses/mit-license.php
