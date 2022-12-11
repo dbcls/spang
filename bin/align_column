@@ -6,10 +6,12 @@ use Encode;
 my $PROGRAM = basename $0;
 my $USAGE=
 "Usage: $PROGRAM [INPUT_TSV]
+-i: show column index
+-n: show column number
 ";
 
 my %OPT;
-getopts('', \%OPT);
+getopts('in', \%OPT);
 
 my @MAX_LEN = ();
 my @TABLE = ();
@@ -18,9 +20,13 @@ my @LEN = ();
 ### Read
 !@ARGV && -t and die $USAGE;
 my $i = 0;
+my $N_COL = 0;
 while (<>) {
     chomp;
-    my @f = split("\t", $_);
+    my @f = split("\t", $_, -1);
+    if (! $N_COL) {
+        $N_COL = @f;
+    }
     push @TABLE, \@f;
     for (my $j=0; $j<@f; $j++) {
 	my $len = length(decode_utf8($f[$j])); # to count multi-bite characters, decoding to utf8 flagged string is necessary
@@ -34,6 +40,25 @@ while (<>) {
     $i ++;
 }
 
+if ($OPT{i} || $OPT{n}) {
+    my $j = 0;
+    for ($j=0; $j<$N_COL-1; $j++) {
+        my $header = get_header($j);
+        my $len = length($header);
+	if (! defined $MAX_LEN[$j]) {
+	    $MAX_LEN[$j] = $len;
+	} elsif ($len > $MAX_LEN[$j]) {
+	    $MAX_LEN[$j] = $len;
+	}
+	my $n_padding = $MAX_LEN[$j] - $len + 2; # two or more white spaces
+	print $header, " " x $n_padding;
+    }
+    if ($N_COL > 0) {
+        print get_header($j);
+    }
+    print "\n";
+}
+
 ### Print
 for (my $i=0; $i<@TABLE; $i++) {
     my $last_col = @{$TABLE[$i]} - 1;
@@ -43,4 +68,23 @@ for (my $i=0; $i<@TABLE; $i++) {
     }
     $last_col >= 0 and print $TABLE[$i][$last_col];
     print "\n";
+}
+
+################################################################################
+### Function ###################################################################
+################################################################################
+
+sub get_header {
+    my ($i) = @_;
+
+    my $header = "";
+    if ($OPT{i}) {
+        $header = "[$i]";
+    }
+    if ($OPT{n}) {
+        my $n = $i + 1;
+        $header .= "$n";
+    }
+
+    return $header;
 }
