@@ -26,6 +26,8 @@ while (<>) {
     my @f = split("\t", $_, -1);
     if (! $N_COL) {
         $N_COL = @f;
+    } elsif ($N_COL < @f) {
+        $N_COL = @f;
     }
     push @TABLE, \@f;
     for (my $j=0; $j<@f; $j++) {
